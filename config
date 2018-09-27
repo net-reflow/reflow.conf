@@ -1,0 +1,68 @@
+# declare a socks5 proxy called privacyproxy
+egress privacyproxy = socks5 127.0.0.1:2123
+# Use the network interface with the ip address 192.168.33.83
+# You may have multiple interfaces that can connect you to the internet
+# when you purchase service from multiple ISP
+# or you have VPN servers and configure the VPN clients in a certain way
+egress workvpn0 = bind 192.168.33.83
+egress proxy1 = socks5 127.0.0.1:7223
+egress moon = bind 10.1.2.3
+
+# you can configure a dns proxy that will forward queries to different upstream servers depending on what domain name is being queried
+dns{
+   # use this address as your DNS server
+   listen=udp 127.0.0.1:5353
+   forward= {
+       # if a domain name is in the zone "secret-sites"
+       # connect to the upstream server 1.1.1.1 via a socks5 proxy defined earlier
+       secret-sites => privacyproxy|udp 1.1.1.1:53
+       # use the local isp dns server for everything else
+       else => udp 192.168.1.1:53
+   }
+}
+
+# you can configure one or more relays
+relay {
+ rule=mytrafficrule
+ listen=socks5 127.0.0.1:1080
+ # you can optionally set a dns server
+ # it will use 8.8.8.8 by default if the option is omitted
+ resolver=udp 127.0.0.1:53
+}
+
+# a decision tree named mytrafficrule
+rule mytrafficrule= any[ # rules enclosed in "any[ ]" will be tried one by one util a rule matches
+    # first look at the domain name
+    cond domain {
+      # if it's in secret-sites, privacyproxy will be chosen, and no more matching is needed
+      secret-sites => privacyproxy
+      # you can chain rules, then following will only match when the domain is in https-only and the protocol is http
+      # otherwise, this "cond domain" section doesn't match, and rules following it will be tried
+      https-only => cond protocol {
+        http => reset
+      }
+      adservers => reset
+    }
+    
+    # next look at ip addresses
+    cond ip {
+        # you can use workvpn0 to access your working environment
+        worknet => workvpn0
+        homelan => direct
+    }
+    # if the rules above hasn't produced a match, continue to check the protocol
+    cond protocol {
+      ssh => any [
+        cond ip  {
+	    # some ssh hosts may be only accessible through a certain proxy
+            mars => moon
+        }
+	# another example of combing conditions: when the protocol is ssh AND the port is 22
+        cond port eq 22 => proxy1
+	# this will always match sucessfully for ssh traffic
+        direct
+      ]
+    }
+    # catch-all rule for everything else
+    direct
+]
