@@ -11,7 +11,7 @@ egress moon = bind 10.1.2.3
 # you can configure a dns proxy that will forward queries to different upstream servers depending on what domain name is being queried
 dns{
    # use this address as your DNS server
-   listen=udp 127.0.0.1:5353
+   listen=udp 127.0.0.1:53535
    forward= {
        # if a domain name is in the zone "secret-sites"
        # connect to the upstream server 1.1.1.1 via a socks5 proxy defined earlier
